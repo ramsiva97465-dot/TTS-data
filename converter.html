@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M4A → WAV Converter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      background: #0a0a0f;
+      color: #e0e0e8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(circle at 30% 40%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 60%, rgba(168, 85, 247, 0.06) 0%, transparent 50%),
+                  radial-gradient(circle at 50% 80%, rgba(56, 189, 248, 0.05) 0%, transparent 40%);
+      animation: bgFloat 20s ease-in-out infinite alternate;
+      z-index: 0;
+    }
+
+    @keyframes bgFloat {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      100% { transform: translate(-30px, 20px) rotate(3deg); }
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 680px;
+      padding: 20px;
+    }
+
+    .card {
+      background: rgba(18, 18, 28, 0.75);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 20px;
+      padding: 40px 36px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header .icon {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+    }
+
+    .header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #c7d2fe, #e9d5ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+      font-size: 0.85rem;
+      color: #7a7a8e;
+      margin-top: 6px;
+    }
+
+    /* Drop zone */
+    .dropzone {
+      border: 2px dashed rgba(99, 102, 241, 0.25);
+      border-radius: 14px;
+      padding: 44px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dropzone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), rgba(168, 85, 247, 0.04));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: rgba(99, 102, 241, 0.5);
+      transform: translateY(-2px);
+    }
+
+    .dropzone:hover::before, .dropzone.dragover::before { opacity: 1; }
+
+    .dropzone .drop-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .dropzone .label {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #c7c7d4;
+    }
+
+    .dropzone .sublabel {
+      font-size: 0.78rem;
+      color: #5e5e72;
+      margin-top: 6px;
+    }
+
+    .dropzone input[type="file"] { display: none; }
+
+    /* Settings bar */
+    .settings {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 20px;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .settings label {
+      font-size: 0.78rem;
+      color: #8888a0;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .settings select {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: #d0d0dc;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      padding: 8px 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .settings select:hover { border-color: rgba(99, 102, 241, 0.4); }
+    .settings select option { background: #1a1a2e; }
+
+    /* File list */
+    .file-list {
+      margin-top: 20px;
+      max-height: 280px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .file-list::-webkit-scrollbar { width: 5px; }
+    .file-list::-webkit-scrollbar-track { background: transparent; }
+    .file-list::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 4px; }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.025);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      transition: all 0.25s;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .file-item .file-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .file-item .file-info { flex: 1; min-width: 0; }
+
+    .file-item .file-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #d0d0dc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-item .file-size {
+      font-size: 0.72rem;
+      color: #6a6a80;
+      margin-top: 2px;
+    }
+
+    .file-item .file-status {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      flex-shrink: 0;
+    }
+
+    .file-status.pending  { background: rgba(250, 204, 21, 0.1); color: #facc15; }
+    .file-status.converting { background: rgba(99, 102, 241, 0.12); color: #818cf8; }
+    .file-status.done     { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+    .file-status.error    { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+    /* Progress bar inside file item */
+    .file-item .progress-bar {
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .file-item .progress-bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6366f1, #a855f7);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    /* Download button per file */
+    .file-item .download-btn {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      display: none;
+    }
+
+    .file-item .download-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+    }
+
+    /* Buttons */
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #7c3aed);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(99, 102, 241, 0.45);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: #a0a0b4;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.08);
+      color: #d0d0dc;
+    }
+
+    .btn-secondary:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .btn-download-all {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(34, 197, 94, 0.25);
+      display: none;
+    }
+
+    .btn-download-all:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(34, 197, 94, 0.4);
+    }
+
+    /* Summary */
+    .summary {
+      margin-top: 20px;
+      text-align: center;
+      padding: 14px;
+      background: rgba(34, 197, 94, 0.06);
+      border: 1px solid rgba(34, 197, 94, 0.12);
+      border-radius: 12px;
+      font-size: 0.82rem;
+      color: #22c55e;
+      font-weight: 500;
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="icon">🎵</div>
+        <h1>M4A → WAV Converter</h1>
+        <p>Drop your .m4a files and convert them to WAV locally</p>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <span class="drop-icon">📂</span>
+        <div class="label">Drag & drop .m4a files here</div>
+        <div class="sublabel">or click to browse · multiple files supported</div>
+        <input type="file" id="fileInput" accept=".m4a,audio/mp4,audio/x-m4a" multiple />
+      </div>
+
+      <div class="settings">
+        <label>Sample Rate</label>
+        <select id="sampleRate">
+          <option value="0">Keep Original</option>
+          <option value="16000">16 000 Hz</option>
+          <option value="22050" selected>22 050 Hz</option>
+          <option value="44100">44 100 Hz</option>
+          <option value="48000">48 000 Hz</option>
+        </select>
+        <label>Channels</label>
+        <select id="channels">
+          <option value="1" selected>Mono</option>
+          <option value="2">Stereo</option>
+        </select>
+      </div>
+
+      <div class="file-list" id="fileList"></div>
+
+      <div class="actions">
+        <button class="btn btn-secondary" id="clearBtn" disabled>✕ Clear</button>
+        <button class="btn btn-primary" id="convertBtn" disabled>
+          Convert All
+        </button>
+        <button class="btn btn-download-all" id="downloadAllBtn">
+          ⬇ Download All
+        </button>
+      </div>
+
+      <div class="summary" id="summary"></div>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const convertBtn = document.getElementById('convertBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const downloadAllBtn = document.getElementById('downloadAllBtn');
+    const summaryEl = document.getElementById('summary');
+    const sampleRateSelect = document.getElementById('sampleRate');
+    const channelsSelect = document.getElementById('channels');
+
+    let fileQueue = []; // { file, el, status, wavBlob, wavName }
+
+    // --- Drop zone events ---
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      handleFiles(fileInput.files);
+      fileInput.value = '';
+    });
+
+    function handleFiles(files) {
+      for (const f of files) {
+        if (!f.name.toLowerCase().endsWith('.m4a')) continue;
+        if (fileQueue.some(q => q.file.name === f.name && q.file.size === f.size)) continue;
+        addFile(f);
+      }
+      updateButtons();
+    }
+
+    function addFile(file) {
+      const el = document.createElement('div');
+      el.className = 'file-item';
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      el.innerHTML = `
+        <div class="file-icon">🎧</div>
+        <div class="file-info">
+          <div class="file-name">${file.name}</div>
+          <div class="file-size">${sizeMB} MB</div>
+          <div class="progress-bar"><div class="fill" style="width:0%"></div></div>
+        </div>
+        <span class="file-status pending">Pending</span>
+        <button class="download-btn">⬇ Save</button>
+      `;
+      fileList.appendChild(el);
+      const item = { file, el, status: 'pending', wavBlob: null, wavName: null };
+      fileQueue.push(item);
+
+      // Per-file download button
+      el.querySelector('.download-btn').addEventListener('click', () => {
+        if (item.wavBlob) downloadBlob(item.wavBlob, item.wavName);
+      });
+    }
+
+    function updateButtons() {
+      const hasPending = fileQueue.some(q => q.status === 'pending');
+      const hasDone = fileQueue.some(q => q.status === 'done');
+      convertBtn.disabled = !hasPending;
+      clearBtn.disabled = fileQueue.length === 0;
+      downloadAllBtn.style.display = hasDone ? 'flex' : 'none';
+    }
+
+    clearBtn.addEventListener('click', () => {
+      fileQueue = [];
+      fileList.innerHTML = '';
+      summaryEl.style.display = 'none';
+      downloadAllBtn.style.display = 'none';
+      updateButtons();
+    });
+
+    // --- Download All ---
+    downloadAllBtn.addEventListener('click', () => {
+      for (const item of fileQueue) {
+        if (item.status === 'done' && item.wavBlob) {
+          downloadBlob(item.wavBlob, item.wavName);
+        }
+      }
+    });
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // --- Conversion ---
+    convertBtn.addEventListener('click', async () => {
+      convertBtn.disabled = true;
+      convertBtn.innerHTML = '<span class="spinner"></span> Converting…';
+      summaryEl.style.display = 'none';
+
+      let done = 0, failed = 0;
+
+      for (const item of fileQueue) {
+        if (item.status !== 'pending') continue;
+        try {
+          setStatus(item, 'converting', 'Converting…');
+          setProgress(item, 10);
+          const arrayBuffer = await item.file.arrayBuffer();
+          setProgress(item, 30);
+
+          const targetRate = parseInt(sampleRateSelect.value);
+          const sampleRate = targetRate === 0 ? undefined : targetRate;
+
+          // Decode with OfflineAudioContext if we need a specific sample rate
+          let audioBuffer;
+          if (sampleRate) {
+            // First decode to get duration
+            const tempCtx = new AudioContext();
+            const tempBuf = await tempCtx.decodeAudioData(arrayBuffer.slice(0));
+            await tempCtx.close();
+
+            const numChannels = parseInt(channelsSelect.value);
+            const length = Math.ceil(tempBuf.duration * sampleRate);
+            const offlineCtx = new OfflineAudioContext(numChannels, length, sampleRate);
+            const source = offlineCtx.createBufferSource();
+
+            // Re-decode in the offline context
+            const tempCtx2 = new AudioContext();
+            source.buffer = await tempCtx2.decodeAudioData(arrayBuffer);
+            await tempCtx2.close();
+
+            source.connect(offlineCtx.destination);
+            source.start(0);
+            setProgress(item, 50);
+            audioBuffer = await offlineCtx.startRendering();
+          } else {
+            const ctx = new AudioContext();
+            audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+            await ctx.close();
+          }
+
+          setProgress(item, 70);
+
+          const numChannels = parseInt(channelsSelect.value);
+          const wavBlob = audioBufferToWav(audioBuffer, numChannels);
+          const wavName = item.file.name.replace(/\.m4a$/i, '.wav');
+          setProgress(item, 90);
+
+          // Store blob for re-download
+          item.wavBlob = wavBlob;
+          item.wavName = wavName;
+
+          // Auto-download
+          downloadBlob(wavBlob, wavName);
+
+          setProgress(item, 100);
+          setStatus(item, 'done', 'Done ✓');
+          item.el.querySelector('.download-btn').style.display = 'inline-block';
+          item.status = 'done';
+          done++;
+        } catch (err) {
+          console.error('Conversion failed:', item.file.name, err);
+          setStatus(item, 'error', 'Error');
+          item.status = 'error';
+          failed++;
+        }
+      }
+
+      convertBtn.innerHTML = 'Convert All';
+      updateButtons();
+
+      summaryEl.style.display = 'block';
+      if (failed === 0) {
+        summaryEl.textContent = `✅ All ${done} file(s) converted successfully!`;
+        summaryEl.style.borderColor = 'rgba(34,197,94,0.12)';
+        summaryEl.style.background = 'rgba(34,197,94,0.06)';
+        summaryEl.style.color = '#22c55e';
+      } else {
+        summaryEl.textContent = `⚠ ${done} converted, ${failed} failed.`;
+        summaryEl.style.borderColor = 'rgba(250,204,21,0.15)';
+        summaryEl.style.background = 'rgba(250,204,21,0.06)';
+        summaryEl.style.color = '#facc15';
+      }
+    });
+
+    function setStatus(item, cls, text) {
+      const badge = item.el.querySelector('.file-status');
+      badge.className = 'file-status ' + cls;
+      badge.textContent = text;
+    }
+
+    function setProgress(item, pct) {
+      item.el.querySelector('.progress-bar .fill').style.width = pct + '%';
+    }
+
+    // --- WAV encoder ---
+    function audioBufferToWav(buffer, targetChannels) {
+      const numChannels = Math.min(targetChannels, buffer.numberOfChannels);
+      const sampleRate = buffer.sampleRate;
+      const length = buffer.length;
+      const bytesPerSample = 2; // 16-bit
+      const blockAlign = numChannels * bytesPerSample;
+      const dataSize = length * blockAlign;
+      const headerSize = 44;
+      const totalSize = headerSize + dataSize;
+
+      const arrayBuffer = new ArrayBuffer(totalSize);
+      const view = new DataView(arrayBuffer);
+
+      // RIFF header
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, totalSize - 8, true);
+      writeString(view, 8, 'WAVE');
+
+      // fmt chunk
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);            // chunk size
+      view.setUint16(20, 1, true);             // PCM
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * blockAlign, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, bytesPerSample * 8, true);
+
+      // data chunk
+      writeString(view, 36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      // Interleave samples
+      const channels = [];
+      for (let c = 0; c < numChannels; c++) {
+        channels.push(buffer.getChannelData(c));
+      }
+
+      let offset = 44;
+      for (let i = 0; i < length; i++) {
+        for (let c = 0; c < numChannels; c++) {
+          let sample = channels[c][i];
+          sample = Math.max(-1, Math.min(1, sample));
+          sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+          view.setInt16(offset, sample | 0, true);
+          offset += 2;
+        }
+      }
+
+      return new Blob([arrayBuffer], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, str) {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    }
+  </script>
+</body>
+</html>
